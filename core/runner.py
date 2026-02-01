@@ -46,5 +46,3 @@ def empezar_monitoreo():
             print(f"{result['api_name']} → {result['status']} ({result['status_code']}) Latency: {result['latency']}s")
         time.sleep(INTERVAL)
 
-if __name__ == "__main__":
-    empezar_monitoreo()
