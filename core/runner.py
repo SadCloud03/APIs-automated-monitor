@@ -1,34 +1,133 @@
-from core.logic import (
-    add_API_database,
-    get_id_API,
-    save_log_dataBase,
-    check_api
-)
+import os
 from time import sleep
+from datetime import datetime, timezone
 
-# ----- APIS INFORMATION -----
-APIS = [
-    "https://catfact.ninja/fact",
-    "https://dog.ceo/api/breeds/image/random"
-]
+from core.logic import (
+    get_all_apis,
+    save_log_dataBase,
+    get_last_status,
+    get_last_alert_at,
+    update_state,
+    touch_alert,
+)
+from core.checker import check_api
+from core.notifier import send_telegram
 
-# ----- MONITORING INTERVAL -----
-INTERVAL = 10
+INTERVAL = 10                  # cada cuánto chequea (segundos)
+DOWN_COOLDOWN_SECONDS = 10    # re-alerta si sigue DOWN cada 5 min
 
-# ------ MAIN LOOP -----
+
+def _parse_sqlite_ts(ts: str):
+    """
+    SQLite CURRENT_TIMESTAMP => 'YYYY-MM-DD HH:MM:SS'
+    Lo tratamos como UTC para comparar.
+    """
+    if not ts:
+        return None
+    return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+
+
+def _cooldown_ok(api_id: int) -> bool:
+    """
+    True si se puede volver a alertar (según last_alert_at en DB).
+    """
+    ts = get_last_alert_at(api_id)
+    last = _parse_sqlite_ts(ts)
+    if last is None:
+        return True
+    now = datetime.now(timezone.utc)
+    return (now - last).total_seconds() >= DOWN_COOLDOWN_SECONDS
+
+
 def empezar_monitoreo():
     print("🚀 Iniciando API Monitor...\n")
 
-    while True:
-        for api_url in APIS:
-            api_id = get_id_API(api_url)
-            result = check_api(api_url)
-            save_log_dataBase(api_id, result)
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    telegram_enabled = bool(bot_token and chat_id)
 
-            print(
-                f"{api_url} → {result['status']} "
-                f"({result['status_code']}) "
-                f"Latency: {result['latency']}s"
-            )
+    if telegram_enabled:
+        print("✅ Telegram alerts habilitadas.")
+    else:
+        print("❌ Telegram alerts deshabilitadas (faltan TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID).")
 
-        sleep(INTERVAL)
+    try:
+        while True:
+            apis = get_all_apis()
+
+            if not apis:
+                print('⚠️ No hay APIs en la DB. Agrega con: python main.py add')
+                sleep(INTERVAL)
+                continue
+
+            for api_id, api_name, api_url in apis:
+                try:
+                    result = check_api(api_url)
+
+                    # 1) Guardar log histórico
+                    save_log_dataBase(api_id, result)
+
+                    # 2) Estado actual y anterior
+                    curr_status = result["status"]
+                    prev_status = get_last_status(api_id)  # puede ser None la primera vez
+
+                    status_code = result.get("status_code")
+                    lat = result.get("latency")
+                    lat_txt = f"{lat}s" if lat is not None else "N/A"
+
+                    print(f"{api_name} → {curr_status} ({status_code}) Latency: {lat_txt}")
+
+                    # 3) Reglas:
+                    # - DOWN: alertar inmediato y luego respetar cooldown (persistente)
+                    # - RECOVERED: alertar cuando venía de DOWN
+                    send_alert = False
+                    alert_reason = ""
+
+                    if curr_status == "DOWN":
+                        if telegram_enabled and _cooldown_ok(api_id):
+                            send_alert = True
+                            alert_reason = "DOWN"
+
+                    elif curr_status == "UP" and prev_status == "DOWN":
+                        if telegram_enabled:
+                            send_alert = True
+                            alert_reason = "RECOVERED"
+
+                    # 4) Enviar alerta si corresponde
+                    if telegram_enabled and send_alert:
+                        if alert_reason == "DOWN":
+                            msg = (
+                                "🚨 API DOWN\n"
+                                f"Name: {api_name}\n"
+                                f"URL: {api_url}\n"
+                                f"Status: {curr_status}\n"
+                                f"Code: {status_code}\n"
+                                f"Latency: {lat_txt}\n"
+                            )
+                        else:
+                            msg = (
+                                "✅ API RECOVERED\n"
+                                f"Name: {api_name}\n"
+                                f"URL: {api_url}\n"
+                                f"Status: {curr_status}\n"
+                                f"Code: {status_code}\n"
+                                f"Latency: {lat_txt}\n"
+                            )
+
+                        try:
+                            send_telegram(msg, bot_token, chat_id)
+                            touch_alert(api_id)  # queda persistido en DB
+                            print("📨 Alerta Telegram enviada.")
+                        except Exception as e:
+                            print(f"⚠️ No se pudo enviar alerta Telegram: {e}")
+
+                    # 5) Guardar estado actual
+                    update_state(api_id, curr_status)
+
+                except Exception as e:
+                    print(f"❌ Error inesperado monitoreando {api_url}: {e}")
+
+            sleep(INTERVAL)
+
+    except KeyboardInterrupt:
+        print("\n🛑 Monitor detenido por el usuario (Ctrl+C).")
