@@ -1,105 +1,125 @@
 import sqlite3
-import requests
-import time 
 from pathlib import Path
+from typing import Optional, Dict, Any, List, Tuple
+from urllib.parse import urlparse
 
-# ----- path a la base de datos ----
-db_path = Path(__file__).parent.parent / 'DataBase' / 'dataBase.db'
-
-# ----- FUNCTIONS ------
-
-# ----- DATABASE FUNCTIONS -----
-
-def add_API_database(api_name, api_url):
-    conexion = sqlite3.connect(db_path)
-    cursor = conexion.cursor()
-
-    cursor.execute("""
-        INSERT INTO APIs (
-            name,
-            url
-        ) VALUES (
-            ?, ?
-        );
-    """, (api_name, api_url))
-
-    conexion.commit()
-    conexion.close()
+DB_PATH = Path(__file__).parent.parent / "DataBase" / "dataBase.db"
+SCHEMA_PATH = Path(__file__).parent.parent / "DataBase" / "schema.sql"
 
 
-
-def get_id_API(url_api):
-    conexion = sqlite3.connect(db_path)
-    cursor = conexion.cursor()
-
-    cursor.execute("""
-        SELECT 
-            id
-        FROM APIs
-        WHERE 
-            url = ?
-    """, (url_api,))
-
-    id_api = cursor.fetchone()[0]
-
-    conexion.close()
-    return id_api
-
-def save_log_dataBase(api_id, new_log):
-    conexion = sqlite3.connect(db_path)
-    cursor = conexion.cursor()
-
-    cursor.execute("""
-        INSERT INTO logs (
-            api_id,
-            status,
-            status_code,
-            latency,
-            response
-        ) VALUES (?, ?, ?, ?, ?)
-    """, (
-        api_id,
-        new_log["status"],
-        new_log["status_code"],
-        new_log["latency"],
-        new_log["response"]
-    ))
-
-    conexion.commit()
-    conexion.close()  
+def is_valid_url(url: str) -> bool:
+    if not isinstance(url, str):
+        return False
+    url = url.strip()
+    if not url:
+        return False
+    if len(url) > 2048:
+        return False
+    parsed = urlparse(url)
+    return parsed.scheme in ("http", "https") and bool(parsed.netloc)
 
 
-# ----- APIs monitoring -----
-def check_api(api_url):
-    try:
-        start_time = time.perf_counter()
-        response = requests.get(api_url, timeout=10)
-        latency = round(time.perf_counter() - start_time, 6)
+def _init_db(conn: sqlite3.Connection) -> None:
+    conn.execute("PRAGMA foreign_keys = ON;")
+    if not SCHEMA_PATH.exists():
+        raise FileNotFoundError(f"No se encontró schema.sql en: {SCHEMA_PATH}")
+    sql = SCHEMA_PATH.read_text(encoding="utf-8")
+    conn.executescript(sql)
 
-        if response.status_code == 200:
-            status = "UP"
-        else:
-            status = "DOWN"
 
-        response_text = response.text[:200]
-        status_code = response.status_code
+def _get_conn() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH)
+    _init_db(conn)
+    return conn
 
-    except requests.exceptions.Timeout:
-        status = "DOWN"
-        latency = None
-        response_text = "Timeout"
-        status_code = None
 
-    except Exception as e:
-        status = "DOWN"
-        latency = None
-        response_text = str(e)
-        status_code = None
+def add_API_database(api_name: str, api_url: str) -> None:
+    api_name = (api_name or "").strip()
+    api_url = (api_url or "").strip()
 
-    return {
-        "api_url": api_url,
-        "status": status,
-        "status_code": status_code,
-        "latency": latency,
-        "response": response_text
-    }
+    if not api_name:
+        raise ValueError("El nombre de la API no puede estar vacío.")
+    if not is_valid_url(api_url):
+        raise ValueError(f"URL inválida: {api_url}")
+
+    with _get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT OR IGNORE INTO APIs (name, url)
+            VALUES (?, ?);
+            """,
+            (api_name, api_url),
+        )
+
+
+def get_all_apis() -> List[Tuple[int, str, str]]:
+    with _get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT id, name, url FROM APIs ORDER BY id ASC;")
+        return cur.fetchall()
+
+
+def save_log_dataBase(api_id: int, log_data: Dict[str, Any]) -> None:
+    with _get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO logs (api_id, status, status_code, latency, response)
+            VALUES (?, ?, ?, ?, ?);
+            """,
+            (
+                api_id,
+                log_data.get("status"),
+                log_data.get("status_code"),
+                log_data.get("latency"),
+                log_data.get("response"),
+            ),
+        )
+
+
+def get_last_status(api_id: int) -> Optional[str]:
+    with _get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT last_status FROM api_state WHERE api_id = ?;", (api_id,))
+        row = cur.fetchone()
+    return row[0] if row else None
+
+
+def get_last_alert_at(api_id: int) -> Optional[str]:
+    """
+    Devuelve last_alert_at como string (ej: '2026-02-02 12:34:56') o None.
+    """
+    with _get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT last_alert_at FROM api_state WHERE api_id = ?;", (api_id,))
+        row = cur.fetchone()
+    return row[0] if row else None
+
+
+def update_state(api_id: int, status: str) -> None:
+    with _get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO api_state (api_id, last_status)
+            VALUES (?, ?)
+            ON CONFLICT(api_id) DO UPDATE SET
+                last_status = excluded.last_status;
+            """,
+            (api_id, status),
+        )
+
+
+def touch_alert(api_id: int) -> None:
+    with _get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO api_state (api_id, last_alert_at)
+            VALUES (?, CURRENT_TIMESTAMP)
+            ON CONFLICT(api_id) DO UPDATE SET
+                last_alert_at = CURRENT_TIMESTAMP;
+            """,
+            (api_id,),
+        )

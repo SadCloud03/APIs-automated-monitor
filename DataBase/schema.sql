@@ -1,8 +1,7 @@
--- Activar integridad referencial
 PRAGMA foreign_keys = ON;
 
 -- =====================
--- Tabla: apis
+-- Tabla: APIs
 -- =====================
 CREATE TABLE IF NOT EXISTS APIs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -23,11 +22,23 @@ CREATE TABLE IF NOT EXISTS logs (
     response TEXT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
 
-    FOREIGN KEY (api_id) REFERENCES apis(id) ON DELETE CASCADE
+    FOREIGN KEY (api_id) REFERENCES APIs(id) ON DELETE CASCADE
 );
 
 -- =====================
--- Índices (performance)
+-- Tabla: api_state
+-- Último estado para detectar cambios UP<->DOWN
+-- =====================
+CREATE TABLE IF NOT EXISTS api_state (
+    api_id INTEGER PRIMARY KEY,
+    last_status TEXT CHECK (last_status IN ('UP', 'DOWN')),
+    last_alert_at DATETIME,
+
+    FOREIGN KEY (api_id) REFERENCES APIs(id) ON DELETE CASCADE
+);
+
+-- =====================
+-- Índices
 -- =====================
 CREATE INDEX IF NOT EXISTS idx_logs_api_id ON logs(api_id);
 CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp);
