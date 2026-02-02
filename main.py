@@ -2,6 +2,8 @@ from dotenv import load_dotenv
 load_dotenv()  # carga .env automáticamente
 
 import sys
+import threading
+
 from core.logic import add_API_database
 from core.runner import empezar_monitoreo
 
@@ -10,11 +12,13 @@ def help_msg():
     print(
         "Uso:\n"
         "  python main.py run\n"
+        "  python main.py serve\n"
+        "  python main.py both\n"
         "  python main.py add \"Nombre\" \"URL\"\n"
         "  python main.py add   (modo interactivo)\n\n"
         "Ejemplo:\n"
         "  python main.py add \"Cat Facts\" \"https://catfact.ninja/fact\"\n"
-        "  python main.py run\n"
+        "  python main.py both\n"
     )
 
 
@@ -30,6 +34,11 @@ def add_interactive():
         print(f"❌ {e}")
 
 
+def serve_api():
+    import uvicorn
+    uvicorn.run("core.api_server:app", host="0.0.0.0", port=8001, reload=False)
+
+
 if __name__ == "__main__":
     if len(sys.argv) == 1:
         empezar_monitoreo()
@@ -39,6 +48,16 @@ if __name__ == "__main__":
 
     if cmd == "run":
         empezar_monitoreo()
+        raise SystemExit(0)
+
+    if cmd == "serve":
+        serve_api()
+        raise SystemExit(0)
+
+    if cmd == "both":
+        t = threading.Thread(target=empezar_monitoreo, daemon=True)
+        t.start()
+        serve_api()
         raise SystemExit(0)
 
     if cmd == "add":

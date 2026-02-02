@@ -3,3 +3,5 @@
 venv/
 ENV/
 .env
+dashboard/node_modules/
+dashboard/dist/

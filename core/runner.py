@@ -1,6 +1,7 @@
 import os
 from time import sleep
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from core.logic import (
     get_all_apis,
@@ -13,18 +14,24 @@ from core.logic import (
 from core.checker import check_api
 from core.notifier import send_telegram
 
-INTERVAL = 10                  # cada cuánto chequea (segundos)
-DOWN_COOLDOWN_SECONDS = 10    # re-alerta si sigue DOWN cada 5 min
+INTERVAL = 10               # cada cuánto chequea (segundos)
+DOWN_COOLDOWN_SECONDS = 10  # re-alerta si sigue DOWN cada X segundos
+
+# Zona horaria Paraguay
+PY_TZ = ZoneInfo("America/Asuncion")
 
 
 def _parse_sqlite_ts(ts: str):
     """
     SQLite CURRENT_TIMESTAMP => 'YYYY-MM-DD HH:MM:SS'
-    Lo tratamos como UTC para comparar.
+
+    OJO: SQLite suele generar CURRENT_TIMESTAMP en UTC.
+    Acá lo interpretamos como hora local PY_TZ (Paraguay) porque lo pediste.
+    Si querés hacerlo "correcto" (UTC en DB y convertir al mostrar), decime y te lo ajusto.
     """
     if not ts:
         return None
-    return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+    return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S").replace(tzinfo=PY_TZ)
 
 
 def _cooldown_ok(api_id: int) -> bool:
@@ -35,7 +42,8 @@ def _cooldown_ok(api_id: int) -> bool:
     last = _parse_sqlite_ts(ts)
     if last is None:
         return True
-    now = datetime.now(timezone.utc)
+
+    now = datetime.now(PY_TZ)
     return (now - last).total_seconds() >= DOWN_COOLDOWN_SECONDS
 
 
@@ -77,7 +85,7 @@ def empezar_monitoreo():
 
                     print(f"{api_name} → {curr_status} ({status_code}) Latency: {lat_txt}")
 
-                    # 3) Reglas:
+                    # 3) Reglas alertas:
                     # - DOWN: alertar inmediato y luego respetar cooldown (persistente)
                     # - RECOVERED: alertar cuando venía de DOWN
                     send_alert = False
@@ -121,8 +129,8 @@ def empezar_monitoreo():
                         except Exception as e:
                             print(f"⚠️ No se pudo enviar alerta Telegram: {e}")
 
-                    # 5) Guardar estado actual
-                    update_state(api_id, curr_status)
+                    # 5) Guardar estado actual (para dashboard)
+                    update_state(api_id, curr_status, status_code, lat)
 
                 except Exception as e:
                     print(f"❌ Error inesperado monitoreando {api_url}: {e}")

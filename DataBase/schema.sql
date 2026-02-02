@@ -27,11 +27,14 @@ CREATE TABLE IF NOT EXISTS logs (
 
 -- =====================
 -- Tabla: api_state
--- Último estado para detectar cambios UP<->DOWN
+-- Último estado + métricas actuales para dashboard
 -- =====================
 CREATE TABLE IF NOT EXISTS api_state (
     api_id INTEGER PRIMARY KEY,
     last_status TEXT CHECK (last_status IN ('UP', 'DOWN')),
+    last_status_code INTEGER,
+    last_latency REAL,
+    last_checked_at DATETIME,
     last_alert_at DATETIME,
 
     FOREIGN KEY (api_id) REFERENCES APIs(id) ON DELETE CASCADE
