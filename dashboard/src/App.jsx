@@ -214,6 +214,7 @@ export default function App() {
             </div>
           ) : null}
 
+          <div className="tableWrap">
           <table className="table">
             <thead>
               <tr>
@@ -263,6 +264,7 @@ export default function App() {
               ) : null}
             </tbody>
           </table>
+          </div>
         </section>
 
         <section className="card">
@@ -294,7 +296,7 @@ export default function App() {
       </main>
 
       <footer className="footer">
-        Backend: <span className="mono">http://localhost:8001</span> • Polling 5s
+        <span className="mono">Desarrollado por el equipo de I++</span> 
       </footer>
     </div>
   );

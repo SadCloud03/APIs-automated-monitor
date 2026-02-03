@@ -97,6 +97,13 @@ button:active { transform: translateY(1px); }
 .table tr.selected { background: #0b1222; }
 .table tr { cursor: pointer; }
 
+.tableWrap{
+  max-height: 420px; /* ~ header + 6 filas */
+  overflow-y: auto;
+  padding-right: 6px;
+  border-radius: 12px;
+}
+
 .badge {
   display: inline-block;
   padding: 4px 8px;
@@ -118,6 +125,9 @@ button:active { transform: translateY(1px); }
   display: grid;
   gap: 8px;
   margin-top: 10px;
+  max-height: 500px; /* ~ 6 logs visibles */
+  overflow-y: auto;
+  padding-right: 6px;
 }
 .logRow {
   display: grid;
@@ -151,3 +161,25 @@ button:active { transform: translateY(1px); }
   opacity: 0.4;
 }
 
+
+
+/* Scrollbar bonito dentro de los paneles */
+.tableWrap::-webkit-scrollbar,
+.logs::-webkit-scrollbar{
+  width: 10px;
+}
+.tableWrap::-webkit-scrollbar-track,
+.logs::-webkit-scrollbar-track{
+  background: #0b1222;
+  border-radius: 999px;
+}
+.tableWrap::-webkit-scrollbar-thumb,
+.logs::-webkit-scrollbar-thumb{
+  background: #23304f;
+  border-radius: 999px;
+  border: 2px solid #0b1222;
+}
+.tableWrap::-webkit-scrollbar-thumb:hover,
+.logs::-webkit-scrollbar-thumb:hover{
+  background: #2a62ff;
+}
