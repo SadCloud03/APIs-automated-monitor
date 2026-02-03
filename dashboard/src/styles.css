@@ -92,6 +92,7 @@ button:active { transform: translateY(1px); }
   border-top: 1px solid #1f2a44;
   padding: 10px 8px;
   text-align: left;
+  vertical-align: top;
 }
 .table tr.selected { background: #0b1222; }
 .table tr { cursor: pointer; }
@@ -138,4 +139,11 @@ button:active { transform: translateY(1px); }
   opacity: 0.7;
   margin-top: 12px;
   font-size: 12px;
+}
+
+.wave {
+  display: block;
+  margin-top: 4px;
+  opacity: 0.9;
+  color: #7aa2ff;
 }

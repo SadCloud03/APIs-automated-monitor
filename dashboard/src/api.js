@@ -36,3 +36,19 @@ export async function deleteApi(apiId) {
   if (!r.ok) throw new Error("Error DELETE /apis/{id}");
   return r.json();
 }
+
+export async function uploadApisTxt(file) {
+  const form = new FormData();
+  form.append("file", file);
+
+  const r = await fetch(`${API_BASE}/apis/upload`, {
+    method: "POST",
+    body: form
+  });
+
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    throw new Error(body?.detail?.message || body?.detail || "Error POST /apis/upload");
+  }
+  return body;
+}

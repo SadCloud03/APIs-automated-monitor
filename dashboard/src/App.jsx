@@ -1,9 +1,44 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { addApi, deleteApi, getApis, getLogs, getOverview } from "./api.js";
+import { addApi, deleteApi, getApis, getLogs, getOverview, uploadApisTxt } from "./api.js";
 
 function StatusBadge({ s }) {
   const cls = s === "UP" ? "badge up" : s === "DOWN" ? "badge down" : "badge";
   return <span className={cls}>{s || "UNKNOWN"}</span>;
+}
+
+function SineWave({ latency }) {
+  const [phase, setPhase] = useState(0);
+
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      setPhase((Date.now() / 1000) * 2); // velocidad
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  const w = 120;
+  const h = 24;
+  const mid = h / 2;
+
+  const baseAmp = 6;
+  const amp = Math.max(2, Math.min(10, baseAmp + (Number(latency) || 0) * 10));
+
+  const points = [];
+  const steps = 48;
+  for (let i = 0; i <= steps; i++) {
+    const x = (i / steps) * w;
+    const y = mid + amp * Math.sin((i / steps) * Math.PI * 2 + phase);
+    points.push(`${x.toFixed(2)},${y.toFixed(2)}`);
+  }
+
+  return (
+    <svg className="wave" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
+      <polyline points={points.join(" ")} fill="none" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
 }
 
 export default function App() {
@@ -15,6 +50,10 @@ export default function App() {
 
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
+
+  const [txtFile, setTxtFile] = useState(null);
+  const [uploadMsg, setUploadMsg] = useState("");
+  const [fileKey, setFileKey] = useState(0);
 
   async function refresh() {
     setErr("");
@@ -34,7 +73,7 @@ export default function App() {
 
   useEffect(() => {
     refresh();
-    const t = setInterval(refresh, 5000); // polling simple
+    const t = setInterval(refresh, 5000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
@@ -68,6 +107,29 @@ export default function App() {
       await refresh();
     } catch (e2) {
       setErr(String(e2?.message || e2));
+    }
+  }
+
+  async function onUploadTxt(e) {
+    e.preventDefault();
+    setErr("");
+    setUploadMsg("");
+
+    if (!txtFile) {
+      setUploadMsg("Elegí un archivo .txt primero.");
+      return;
+    }
+
+    try {
+      setUploadMsg("Subiendo...");
+      const res = await uploadApisTxt(txtFile);
+      setUploadMsg(`OK: agregadas ${res.added} | saltadas ${res.skipped}`);
+      setTxtFile(null);
+      setFileKey((k) => k + 1);
+      await refresh();
+    } catch (e2) {
+      setErr(String(e2?.message || e2));
+      setUploadMsg("");
     }
   }
 
@@ -113,6 +175,26 @@ export default function App() {
             <button type="submit">Agregar</button>
           </form>
 
+          <form className="row" onSubmit={onUploadTxt}>
+            <input
+              key={fileKey}
+              type="file"
+              accept=".txt"
+              onChange={(e) => setTxtFile(e.target.files?.[0] || null)}
+            />
+            <button type="submit" disabled={!txtFile}>Subir TXT</button>
+          </form>
+
+          <div className="muted" style={{ marginBottom: 10 }}>
+            {txtFile ? `Archivo: ${txtFile.name} (${txtFile.size} bytes)` : "Elegí un .txt para cargar muchas APIs."}
+          </div>
+
+          {uploadMsg ? (
+            <div className="muted" style={{ marginBottom: 10 }}>
+              {uploadMsg}
+            </div>
+          ) : null}
+
           <table className="table">
             <thead>
               <tr>
@@ -133,7 +215,10 @@ export default function App() {
                 >
                   <td><StatusBadge s={a.last_status} /></td>
                   <td className="mono">{a.name}</td>
-                  <td>{a.last_latency != null ? `${a.last_latency}s` : "—"}</td>
+                  <td>
+                    <div>{a.last_latency != null ? `${a.last_latency}s` : "—"}</div>
+                    <SineWave latency={a.last_latency} />
+                  </td>
                   <td className="mono">{a.last_checked_at || "—"}</td>
                   <td>
                     <button
