@@ -2,12 +2,19 @@ import sqlite3
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 from urllib.parse import urlparse
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 DB_PATH = Path(__file__).parent.parent / "DataBase" / "dataBase.db"
 SCHEMA_PATH = Path(__file__).parent.parent / "DataBase" / "schema.sql"
 
-# GMT-3 fijo (UTC-3)
-TZ_MOD = "-3 hours"
+# Hora local para la demo (Paraguay). Cambiá si querés.
+LOCAL_TZ = ZoneInfo("America/Asuncion")
+
+
+def _now_local_str() -> str:
+    """Formato SQLite: 'YYYY-MM-DD HH:MM:SS'"""
+    return datetime.now(LOCAL_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def is_valid_url(url: str) -> bool:
@@ -23,7 +30,11 @@ def is_valid_url(url: str) -> bool:
 
 
 def _ensure_migrations(conn: sqlite3.Connection) -> None:
+    """
+    Migra DBs existentes agregando columnas nuevas en api_state.
+    """
     cur = conn.cursor()
+
     cur.execute("PRAGMA table_info(api_state);")
     cols = {row[1] for row in cur.fetchall()}
 
@@ -34,6 +45,8 @@ def _ensure_migrations(conn: sqlite3.Connection) -> None:
             cur.execute("ALTER TABLE api_state ADD COLUMN last_latency REAL;")
         if "last_checked_at" not in cols:
             cur.execute("ALTER TABLE api_state ADD COLUMN last_checked_at DATETIME;")
+        if "last_alert_at" not in cols:
+            cur.execute("ALTER TABLE api_state ADD COLUMN last_alert_at DATETIME;")
 
 
 def _init_db(conn: sqlite3.Connection) -> None:
@@ -52,6 +65,10 @@ def _get_conn() -> sqlite3.Connection:
     return conn
 
 
+# -------------------------
+# Escrituras
+# -------------------------
+
 def add_API_database(api_name: str, api_url: str) -> None:
     api_name = (api_name or "").strip()
     api_url = (api_url or "").strip()
@@ -65,10 +82,10 @@ def add_API_database(api_name: str, api_url: str) -> None:
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT OR IGNORE INTO APIs (name, url)
-            VALUES (?, ?);
+            INSERT OR IGNORE INTO APIs (name, url, created_at)
+            VALUES (?, ?, ?);
             """,
-            (api_name, api_url),
+            (api_name, api_url, _now_local_str()),
         )
 
 
@@ -82,9 +99,9 @@ def save_log_dataBase(api_id: int, log_data: Dict[str, Any]) -> None:
     with _get_conn() as conn:
         cur = conn.cursor()
         cur.execute(
-            f"""
+            """
             INSERT INTO logs (api_id, status, status_code, latency, response, timestamp)
-            VALUES (?, ?, ?, ?, ?, datetime('now','{TZ_MOD}'));
+            VALUES (?, ?, ?, ?, ?, ?);
             """,
             (
                 api_id,
@@ -92,24 +109,28 @@ def save_log_dataBase(api_id: int, log_data: Dict[str, Any]) -> None:
                 log_data.get("status_code"),
                 log_data.get("latency"),
                 log_data.get("response"),
+                _now_local_str(),
             ),
         )
 
 
 def update_state(api_id: int, status: str, status_code: Optional[int], latency: Optional[float]) -> None:
+    """
+    Guarda el "estado actual" que consumirá el dashboard.
+    """
     with _get_conn() as conn:
         cur = conn.cursor()
         cur.execute(
-            f"""
+            """
             INSERT INTO api_state (api_id, last_status, last_status_code, last_latency, last_checked_at)
-            VALUES (?, ?, ?, ?, datetime('now','{TZ_MOD}'))
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(api_id) DO UPDATE SET
                 last_status      = excluded.last_status,
                 last_status_code = excluded.last_status_code,
                 last_latency     = excluded.last_latency,
                 last_checked_at  = excluded.last_checked_at;
             """,
-            (api_id, status, status_code, latency),
+            (api_id, status, status_code, latency, _now_local_str()),
         )
 
 
@@ -117,15 +138,19 @@ def touch_alert(api_id: int) -> None:
     with _get_conn() as conn:
         cur = conn.cursor()
         cur.execute(
-            f"""
+            """
             INSERT INTO api_state (api_id, last_alert_at)
-            VALUES (?, datetime('now','{TZ_MOD}'))
+            VALUES (?, ?)
             ON CONFLICT(api_id) DO UPDATE SET
-                last_alert_at = datetime('now','{TZ_MOD}');
+                last_alert_at = excluded.last_alert_at;
             """,
-            (api_id,),
+            (api_id, _now_local_str()),
         )
 
+
+# -------------------------
+# Lecturas (monitor + dashboard)
+# -------------------------
 
 def get_all_apis() -> List[Tuple[int, str, str]]:
     with _get_conn() as conn:
@@ -136,21 +161,9 @@ def get_all_apis() -> List[Tuple[int, str, str]]:
 
 
 def get_api(api_id: int) -> Optional[Dict[str, Any]]:
-    # Opción B: si created_at ya está guardado en GMT-3, NO lo conviertas acá.
     with _get_conn() as conn:
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT
-                id,
-                name,
-                url,
-                created_at
-            FROM APIs
-            WHERE id = ?;
-            """,
-            (api_id,),
-        )
+        cur.execute("SELECT id, name, url, created_at FROM APIs WHERE id = ?;", (api_id,))
         r = cur.fetchone()
         return dict(r) if r else None
 
@@ -164,6 +177,9 @@ def get_last_status(api_id: int) -> Optional[str]:
 
 
 def get_last_alert_at(api_id: int) -> Optional[str]:
+    """
+    Devuelve last_alert_at como string (ej: '2026-02-02 12:34:56') o None.
+    """
     with _get_conn() as conn:
         cur = conn.cursor()
         cur.execute("SELECT last_alert_at FROM api_state WHERE api_id = ?;", (api_id,))
@@ -172,7 +188,9 @@ def get_last_alert_at(api_id: int) -> Optional[str]:
 
 
 def get_apis_with_state() -> List[Dict[str, Any]]:
-    # Opción B: NO usar datetime(campo,'-3 hours') al leer.
+    """
+    Listado principal del dashboard.
+    """
     with _get_conn() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -196,6 +214,9 @@ def get_apis_with_state() -> List[Dict[str, Any]]:
 
 
 def get_logs(api_id: int, limit: int = 200, since: Optional[str] = None, until: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    since/until: strings tipo 'YYYY-MM-DD HH:MM:SS'
+    """
     limit = max(1, min(int(limit), 2000))
 
     where = ["api_id = ?"]
@@ -214,14 +235,7 @@ def get_logs(api_id: int, limit: int = 200, since: Optional[str] = None, until: 
         cur = conn.cursor()
         cur.execute(
             f"""
-            SELECT
-                id,
-                api_id,
-                status,
-                status_code,
-                latency,
-                response,
-                timestamp
+            SELECT id, api_id, status, status_code, latency, response, timestamp
             FROM logs
             WHERE {where_sql}
             ORDER BY timestamp DESC
@@ -233,6 +247,9 @@ def get_logs(api_id: int, limit: int = 200, since: Optional[str] = None, until: 
 
 
 def get_overview_stats() -> Dict[str, Any]:
+    """
+    KPIs simples para el dashboard.
+    """
     with _get_conn() as conn:
         cur = conn.cursor()
 

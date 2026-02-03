@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS APIs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     url TEXT NOT NULL UNIQUE,
-    created_at DATETIME DEFAULT (datetime('now','-3 hours'))
+    created_at DATETIME DEFAULT (datetime('now','localtime'))
 );
 
 -- =====================
@@ -20,13 +20,14 @@ CREATE TABLE IF NOT EXISTS logs (
     status_code INTEGER,
     latency REAL,
     response TEXT,
-    timestamp DATETIME DEFAULT (datetime('now','-3 hours')),
+    timestamp DATETIME DEFAULT (datetime('now','localtime')),
 
     FOREIGN KEY (api_id) REFERENCES APIs(id) ON DELETE CASCADE
 );
 
 -- =====================
 -- Tabla: api_state
+-- Último estado + métricas actuales para dashboard
 -- =====================
 CREATE TABLE IF NOT EXISTS api_state (
     api_id INTEGER PRIMARY KEY,
@@ -39,5 +40,8 @@ CREATE TABLE IF NOT EXISTS api_state (
     FOREIGN KEY (api_id) REFERENCES APIs(id) ON DELETE CASCADE
 );
 
+-- =====================
+-- Índices
+-- =====================
 CREATE INDEX IF NOT EXISTS idx_logs_api_id ON logs(api_id);
 CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp);

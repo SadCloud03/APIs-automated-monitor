@@ -21,9 +21,14 @@ PY_TZ = ZoneInfo("America/Asuncion")
 
 
 def _parse_sqlite_ts(ts: str):
-    if not ts:
-        return None
-    return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S").replace(tzinfo=PY_TZ)
+    """
+    SQLite timestamp => 'YYYY-MM-DD HH:MM:SS'
+
+    En este proyecto guardamos los timestamps ya en hora local (America/Asuncion),
+    así que acá solo lo parseamos y le ponemos tzinfo=PY_TZ.
+    """
+
+
 
 
 def _cooldown_ok(api_id: int) -> bool:
