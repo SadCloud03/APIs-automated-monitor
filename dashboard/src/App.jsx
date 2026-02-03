@@ -6,28 +6,35 @@ function StatusBadge({ s }) {
   return <span className={cls}>{s || "UNKNOWN"}</span>;
 }
 
-function SineWave({ latency }) {
+function SineWave({ latency, seed = 0, status }) {
   const [phase, setPhase] = useState(0);
 
   useEffect(() => {
+    if (status === "DOWN") return; // ⛔ no animar si está caído
+
     let raf = 0;
     const tick = () => {
-      setPhase((Date.now() / 1000) * 2); // velocidad
+      setPhase((Date.now() / 1000) * 2 + seed * 0.9);
       raf = requestAnimationFrame(tick);
     };
+
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [seed, status]);
 
   const w = 120;
   const h = 24;
   const mid = h / 2;
 
   const baseAmp = 6;
-  const amp = Math.max(2, Math.min(10, baseAmp + (Number(latency) || 0) * 10));
+  const amp =
+    status === "DOWN"
+      ? 0 // 📉 línea plana
+      : Math.max(2, Math.min(10, baseAmp + (Number(latency) || 0) * 10));
 
   const points = [];
   const steps = 48;
+
   for (let i = 0; i <= steps; i++) {
     const x = (i / steps) * w;
     const y = mid + amp * Math.sin((i / steps) * Math.PI * 2 + phase);
@@ -35,11 +42,23 @@ function SineWave({ latency }) {
   }
 
   return (
-    <svg className="wave" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
-      <polyline points={points.join(" ")} fill="none" stroke="currentColor" strokeWidth="2" />
+    <svg
+      className={`wave ${status === "DOWN" ? "wave-down" : "wave-up"}`}
+      width={w}
+      height={h}
+      viewBox={`0 0 ${w} ${h}`}
+      aria-hidden="true"
+    >
+      <polyline
+        points={points.join(" ")}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
     </svg>
   );
 }
+
 
 export default function App() {
   const [overview, setOverview] = useState({ total: 0, up: 0, down: 0 });
@@ -216,9 +235,14 @@ export default function App() {
                   <td><StatusBadge s={a.last_status} /></td>
                   <td className="mono">{a.name}</td>
                   <td>
-                    <div>{a.last_latency != null ? `${a.last_latency}s` : "—"}</div>
-                    <SineWave latency={a.last_latency} />
+                      <div>{a.last_latency != null ? `${a.last_latency}s` : "—"}</div>
+                      <SineWave
+                        latency={a.last_latency}
+                        seed={a.id}
+                        status={a.last_status}
+                      />
                   </td>
+
                   <td className="mono">{a.last_checked_at || "—"}</td>
                   <td>
                     <button

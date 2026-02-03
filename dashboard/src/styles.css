@@ -147,3 +147,7 @@ button:active { transform: translateY(1px); }
   opacity: 0.9;
   color: #7aa2ff;
 }
+.wave-down {
+  opacity: 0.4;
+}
+
