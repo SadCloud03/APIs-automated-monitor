@@ -2,19 +2,16 @@ import sqlite3
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 from urllib.parse import urlparse
-from datetime import datetime
-from zoneinfo import ZoneInfo
 
 DB_PATH = Path(__file__).parent.parent / "DataBase" / "dataBase.db"
 SCHEMA_PATH = Path(__file__).parent.parent / "DataBase" / "schema.sql"
 
-# Hora local para la demo (Paraguay). Cambiá si querés.
-LOCAL_TZ = ZoneInfo("America/Asuncion")
-
-
-def _now_local_str() -> str:
-    """Formato SQLite: 'YYYY-MM-DD HH:MM:SS'"""
-    return datetime.now(LOCAL_TZ).strftime("%Y-%m-%d %H:%M:%S")
+# -----------------------------------------------------------------------------
+# Timezone handling (hackathon-friendly)
+# -----------------------------------------------------------------------------
+# SQLite CURRENT_TIMESTAMP es UTC. Para la demo guardamos todo ya ajustado a UTC-3
+# (Asunción) para que el dashboard muestre la hora correcta sin convertir en frontend.
+TZ_MOD = "-3 hours"
 
 
 def is_valid_url(url: str) -> bool:
@@ -31,7 +28,7 @@ def is_valid_url(url: str) -> bool:
 
 def _ensure_migrations(conn: sqlite3.Connection) -> None:
     """
-    Migra DBs existentes agregando columnas nuevas en api_state.
+    Migra DBs existentes agregando columnas faltantes en api_state.
     """
     cur = conn.cursor()
 
@@ -45,6 +42,7 @@ def _ensure_migrations(conn: sqlite3.Connection) -> None:
             cur.execute("ALTER TABLE api_state ADD COLUMN last_latency REAL;")
         if "last_checked_at" not in cols:
             cur.execute("ALTER TABLE api_state ADD COLUMN last_checked_at DATETIME;")
+        # ✅ FALTABA
         if "last_alert_at" not in cols:
             cur.execute("ALTER TABLE api_state ADD COLUMN last_alert_at DATETIME;")
 
@@ -83,25 +81,23 @@ def add_API_database(api_name: str, api_url: str) -> None:
         cur.execute(
             """
             INSERT OR IGNORE INTO APIs (name, url, created_at)
-            VALUES (?, ?, ?);
+            VALUES (?, ?, datetime('now', ?));
             """,
-            (api_name, api_url, _now_local_str()),
+            (api_name, api_url, TZ_MOD),
         )
 
 
 def delete_api(api_id: int) -> None:
     with _get_conn() as conn:
-        cur = conn.cursor()
-        cur.execute("DELETE FROM APIs WHERE id = ?;", (api_id,))
+        conn.execute("DELETE FROM APIs WHERE id = ?;", (api_id,))
 
 
 def save_log_dataBase(api_id: int, log_data: Dict[str, Any]) -> None:
     with _get_conn() as conn:
-        cur = conn.cursor()
-        cur.execute(
+        conn.execute(
             """
             INSERT INTO logs (api_id, status, status_code, latency, response, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?);
+            VALUES (?, ?, ?, ?, ?, datetime('now', ?));
             """,
             (
                 api_id,
@@ -109,91 +105,71 @@ def save_log_dataBase(api_id: int, log_data: Dict[str, Any]) -> None:
                 log_data.get("status_code"),
                 log_data.get("latency"),
                 log_data.get("response"),
-                _now_local_str(),
+                TZ_MOD,
             ),
         )
 
 
 def update_state(api_id: int, status: str, status_code: Optional[int], latency: Optional[float]) -> None:
-    """
-    Guarda el "estado actual" que consumirá el dashboard.
-    """
     with _get_conn() as conn:
-        cur = conn.cursor()
-        cur.execute(
+        conn.execute(
             """
             INSERT INTO api_state (api_id, last_status, last_status_code, last_latency, last_checked_at)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, datetime('now', ?))
             ON CONFLICT(api_id) DO UPDATE SET
                 last_status      = excluded.last_status,
                 last_status_code = excluded.last_status_code,
                 last_latency     = excluded.last_latency,
                 last_checked_at  = excluded.last_checked_at;
             """,
-            (api_id, status, status_code, latency, _now_local_str()),
+            (api_id, status, status_code, latency, TZ_MOD),
         )
 
 
 def touch_alert(api_id: int) -> None:
     with _get_conn() as conn:
-        cur = conn.cursor()
-        cur.execute(
+        conn.execute(
             """
             INSERT INTO api_state (api_id, last_alert_at)
-            VALUES (?, ?)
+            VALUES (?, datetime('now', ?))
             ON CONFLICT(api_id) DO UPDATE SET
-                last_alert_at = excluded.last_alert_at;
+                last_alert_at = datetime('now', ?);
             """,
-            (api_id, _now_local_str()),
+            (api_id, TZ_MOD, TZ_MOD),
         )
 
 
 # -------------------------
-# Lecturas (monitor + dashboard)
+# Lecturas
 # -------------------------
 
 def get_all_apis() -> List[Tuple[int, str, str]]:
     with _get_conn() as conn:
-        cur = conn.cursor()
-        cur.execute("SELECT id, name, url FROM APIs ORDER BY id ASC;")
-        rows = cur.fetchall()
+        rows = conn.execute("SELECT id, name, url FROM APIs ORDER BY id ASC;").fetchall()
         return [(r["id"], r["name"], r["url"]) for r in rows]
 
 
 def get_api(api_id: int) -> Optional[Dict[str, Any]]:
     with _get_conn() as conn:
-        cur = conn.cursor()
-        cur.execute("SELECT id, name, url, created_at FROM APIs WHERE id = ?;", (api_id,))
-        r = cur.fetchone()
+        r = conn.execute("SELECT id, name, url, created_at FROM APIs WHERE id = ?;", (api_id,)).fetchone()
         return dict(r) if r else None
 
 
 def get_last_status(api_id: int) -> Optional[str]:
     with _get_conn() as conn:
-        cur = conn.cursor()
-        cur.execute("SELECT last_status FROM api_state WHERE api_id = ?;", (api_id,))
-        row = cur.fetchone()
+        row = conn.execute("SELECT last_status FROM api_state WHERE api_id = ?;", (api_id,)).fetchone()
     return row["last_status"] if row else None
 
 
 def get_last_alert_at(api_id: int) -> Optional[str]:
-    """
-    Devuelve last_alert_at como string (ej: '2026-02-02 12:34:56') o None.
-    """
     with _get_conn() as conn:
-        cur = conn.cursor()
-        cur.execute("SELECT last_alert_at FROM api_state WHERE api_id = ?;", (api_id,))
-        row = cur.fetchone()
+        row = conn.execute("SELECT last_alert_at FROM api_state WHERE api_id = ?;", (api_id,)).fetchone()
     return row["last_alert_at"] if row else None
 
 
 def get_apis_with_state() -> List[Dict[str, Any]]:
-    """
-    Listado principal del dashboard.
-    """
     with _get_conn() as conn:
-        cur = conn.cursor()
-        cur.execute(
+        rows = conn.execute(
             """
             SELECT
                 a.id,
@@ -209,14 +185,11 @@ def get_apis_with_state() -> List[Dict[str, Any]]:
             LEFT JOIN api_state s ON s.api_id = a.id
             ORDER BY a.id ASC;
             """
-        )
-        return [dict(r) for r in cur.fetchall()]
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 def get_logs(api_id: int, limit: int = 200, since: Optional[str] = None, until: Optional[str] = None) -> List[Dict[str, Any]]:
-    """
-    since/until: strings tipo 'YYYY-MM-DD HH:MM:SS'
-    """
     limit = max(1, min(int(limit), 2000))
 
     where = ["api_id = ?"]
@@ -232,8 +205,7 @@ def get_logs(api_id: int, limit: int = 200, since: Optional[str] = None, until: 
     where_sql = " AND ".join(where)
 
     with _get_conn() as conn:
-        cur = conn.cursor()
-        cur.execute(
+        rows = conn.execute(
             f"""
             SELECT id, api_id, status, status_code, latency, response, timestamp
             FROM logs
@@ -242,24 +214,43 @@ def get_logs(api_id: int, limit: int = 200, since: Optional[str] = None, until: 
             LIMIT ?;
             """,
             (*params, limit),
-        )
-        return [dict(r) for r in cur.fetchall()]
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 def get_overview_stats() -> Dict[str, Any]:
-    """
-    KPIs simples para el dashboard.
-    """
     with _get_conn() as conn:
-        cur = conn.cursor()
-
-        cur.execute("SELECT COUNT(*) AS n FROM APIs;")
-        total = cur.fetchone()["n"]
-
-        cur.execute("SELECT COUNT(*) AS n FROM api_state WHERE last_status = 'UP';")
-        up = cur.fetchone()["n"]
-
-        cur.execute("SELECT COUNT(*) AS n FROM api_state WHERE last_status = 'DOWN';")
-        down = cur.fetchone()["n"]
-
+        total = conn.execute("SELECT COUNT(*) AS n FROM APIs;").fetchone()["n"]
+        up = conn.execute("SELECT COUNT(*) AS n FROM api_state WHERE last_status = 'UP';").fetchone()["n"]
+        down = conn.execute("SELECT COUNT(*) AS n FROM api_state WHERE last_status = 'DOWN';").fetchone()["n"]
     return {"total": total, "up": up, "down": down}
+
+
+# -------------------------
+# ✅ Telegram subscribers
+# -------------------------
+
+def add_subscriber(chat_id: int, username: str = None, first_name: str = None, last_name: str = None) -> None:
+    with _get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO subscribers (chat_id, username, first_name, last_name)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(chat_id) DO UPDATE SET
+              username=excluded.username,
+              first_name=excluded.first_name,
+              last_name=excluded.last_name;
+            """,
+            (chat_id, username, first_name, last_name),
+        )
+
+
+def remove_subscriber(chat_id: int) -> None:
+    with _get_conn() as conn:
+        conn.execute("DELETE FROM subscribers WHERE chat_id = ?;", (chat_id,))
+
+
+def get_subscribers() -> List[Dict[str, Any]]:
+    with _get_conn() as conn:
+        rows = conn.execute("SELECT chat_id, username, first_name, last_name FROM subscribers;").fetchall()
+        return [dict(r) for r in rows]
