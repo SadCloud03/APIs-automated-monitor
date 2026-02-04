@@ -10,6 +10,9 @@ Sistema de monitoreo automatizado de APIs que combina **Python (FastAPI)** y **N
 * Enviar notificaciones (Telegram)
 * Probar APIs demo para desarrollo
 
+**Para informacion extra de proceso**
+https://www.notion.so/Monitoreo-automatizado-de-APIs-2f949a03b2df808eac9de2273015298a?source=copy_link
+
 ---
 
 ## Tecnologías usadas
