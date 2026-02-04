@@ -57,7 +57,8 @@ def empezar_monitoreo():
     print("🚀 Iniciando API Monitor...\n")
 
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-    telegram_enabled = bool(bot_token)
+    telegram_enabled = bool(bot_token) and os.getenv("RUNNER_TELEGRAM_ENABLED", "0") == "1"
+
 
     if telegram_enabled:
         print("✅ Telegram habilitado (TELEGRAM_BOT_TOKEN OK).")
