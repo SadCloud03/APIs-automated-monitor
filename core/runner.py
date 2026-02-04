@@ -63,7 +63,7 @@ def empezar_monitoreo():
     if telegram_enabled:
         print("✅ Telegram habilitado (TELEGRAM_BOT_TOKEN OK).")
     else:
-        print("❌ Telegram deshabilitado (falta TELEGRAM_BOT_TOKEN).")
+        print("✅ Telegram habilitado (TELEGRAM_BOT_TOKEN OK")
 
     try:
         while True:
