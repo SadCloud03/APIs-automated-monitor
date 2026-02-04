@@ -9,6 +9,7 @@ body {
 }
 
 .wrap { padding: 18px; }
+
 .topbar {
   display: flex;
   align-items: flex-start;
@@ -17,12 +18,41 @@ body {
   margin-bottom: 12px;
 }
 
+.titleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 h1 { margin: 0; font-size: 22px; }
+
+.telegram-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #229ED9;
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.telegram-btn:hover {
+  opacity: 0.92;
+}
+
+.telegram-btn:active {
+  transform: translateY(1px);
+}
 
 .kpis {
   display: flex;
   gap: 10px;
 }
+
 .kpi {
   background: #121a2a;
   border: 1px solid #1f2a44;
@@ -30,6 +60,7 @@ h1 { margin: 0; font-size: 22px; }
   padding: 10px 12px;
   min-width: 90px;
 }
+
 .kpiLabel { font-size: 12px; opacity: 0.8; }
 .kpiValue { font-size: 18px; font-weight: 700; }
 
@@ -62,6 +93,7 @@ h2 { margin: 0 0 10px 0; font-size: 16px; }
   gap: 8px;
   margin-bottom: 10px;
 }
+
 input {
   background: #0b1222;
   border: 1px solid #23304f;
@@ -71,6 +103,7 @@ input {
   outline: none;
   width: 100%;
 }
+
 button {
   background: #2a62ff;
   border: 0;
@@ -80,6 +113,7 @@ button {
   cursor: pointer;
   font-weight: 600;
 }
+
 button.danger { background: #ff3a5c; }
 button:active { transform: translateY(1px); }
 
@@ -88,17 +122,19 @@ button:active { transform: translateY(1px); }
   border-collapse: collapse;
   font-size: 13px;
 }
+
 .table th, .table td {
   border-top: 1px solid #1f2a44;
   padding: 10px 8px;
   text-align: left;
   vertical-align: top;
 }
+
 .table tr.selected { background: #0b1222; }
 .table tr { cursor: pointer; }
 
-.tableWrap{
-  max-height: 420px; /* ~ header + 6 filas */
+.tableWrap {
+  max-height: 420px;
   overflow-y: auto;
   padding-right: 6px;
   border-radius: 12px;
@@ -112,10 +148,12 @@ button:active { transform: translateY(1px); }
   background: #0b1222;
   font-size: 12px;
 }
+
 .badge.up {
   border-color: #1b7f3a;
   background: #0e1f16;
 }
+
 .badge.down {
   border-color: #8a2037;
   background: #231018;
@@ -125,10 +163,11 @@ button:active { transform: translateY(1px); }
   display: grid;
   gap: 8px;
   margin-top: 10px;
-  max-height: 500px; /* ~ 6 logs visibles */
+  max-height: 500px;
   overflow-y: auto;
   padding-right: 6px;
 }
+
 .logRow {
   display: grid;
   grid-template-columns: 160px 80px 120px 120px 1fr;
@@ -140,7 +179,10 @@ button:active { transform: translateY(1px); }
   background: #0b1222;
 }
 
-.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
 .muted { opacity: 0.75; }
 .sub { margin-bottom: 10px; }
 .clip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -157,29 +199,31 @@ button:active { transform: translateY(1px); }
   opacity: 0.9;
   color: #7aa2ff;
 }
+
 .wave-down {
   opacity: 0.4;
 }
 
-
-
-/* Scrollbar bonito dentro de los paneles */
+/* Scrollbars */
 .tableWrap::-webkit-scrollbar,
-.logs::-webkit-scrollbar{
+.logs::-webkit-scrollbar {
   width: 10px;
 }
+
 .tableWrap::-webkit-scrollbar-track,
-.logs::-webkit-scrollbar-track{
+.logs::-webkit-scrollbar-track {
   background: #0b1222;
   border-radius: 999px;
 }
+
 .tableWrap::-webkit-scrollbar-thumb,
-.logs::-webkit-scrollbar-thumb{
+.logs::-webkit-scrollbar-thumb {
   background: #23304f;
   border-radius: 999px;
   border: 2px solid #0b1222;
 }
+
 .tableWrap::-webkit-scrollbar-thumb:hover,
-.logs::-webkit-scrollbar-thumb:hover{
+.logs::-webkit-scrollbar-thumb:hover {
   background: #2a62ff;
 }

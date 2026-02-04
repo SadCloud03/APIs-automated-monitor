@@ -10,7 +10,7 @@ function SineWave({ latency, seed = 0, status }) {
   const [phase, setPhase] = useState(0);
 
   useEffect(() => {
-    if (status === "DOWN") return; // ⛔ no animar si está caído
+    if (status === "DOWN") return;
 
     let raf = 0;
     const tick = () => {
@@ -29,7 +29,7 @@ function SineWave({ latency, seed = 0, status }) {
   const baseAmp = 6;
   const amp =
     status === "DOWN"
-      ? 0 // 📉 línea plana
+      ? 0
       : Math.max(2, Math.min(10, baseAmp + (Number(latency) || 0) * 10));
 
   const points = [];
@@ -58,7 +58,6 @@ function SineWave({ latency, seed = 0, status }) {
     </svg>
   );
 }
-
 
 export default function App() {
   const [overview, setOverview] = useState({ total: 0, up: 0, down: 0 });
@@ -94,7 +93,6 @@ export default function App() {
     refresh();
     const t = setInterval(refresh, 5000);
     return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
   const selectedApi = useMemo(
@@ -155,7 +153,19 @@ export default function App() {
   return (
     <div className="wrap">
       <header className="topbar">
-        <h1>API Monitor Dashboard</h1>
+        <div className="titleBlock">
+          <h1>API Monitor Dashboard</h1>
+
+          <a
+            href="https://t.me/API_m0nit0r_bot?start=dashboard"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="telegram-btn"
+          >
+            🤖 Abrir bot de Telegram
+          </a>
+        </div>
+
         <div className="kpis">
           <div className="kpi">
             <div className="kpiLabel">Total</div>
@@ -215,55 +225,50 @@ export default function App() {
           ) : null}
 
           <div className="tableWrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Status</th>
-                <th>Nombre</th>
-                <th>Latency</th>
-                <th>Último check</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {apis.map((a) => (
-                <tr
-                  key={a.id}
-                  className={selectedId === a.id ? "selected" : ""}
-                  onClick={() => setSelectedId(a.id)}
-                  title={a.url}
-                >
-                  <td><StatusBadge s={a.last_status} /></td>
-                  <td className="mono">{a.name}</td>
-                  <td>
-                      <div>{a.last_latency != null ? `${a.last_latency}s` : "—"}</div>
-                      <SineWave
-                        latency={a.last_latency}
-                        seed={a.id}
-                        status={a.last_status}
-                      />
-                  </td>
-
-                  <td className="mono">{a.last_checked_at || "—"}</td>
-                  <td>
-                    <button
-                      className="danger"
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete(a.id);
-                      }}
-                    >
-                      Borrar
-                    </button>
-                  </td>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Nombre</th>
+                  <th>Latency</th>
+                  <th>Último check</th>
+                  <th></th>
                 </tr>
-              ))}
-              {!apis.length ? (
-                <tr><td colSpan="5">No hay APIs cargadas.</td></tr>
-              ) : null}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {apis.map((a) => (
+                  <tr
+                    key={a.id}
+                    className={selectedId === a.id ? "selected" : ""}
+                    onClick={() => setSelectedId(a.id)}
+                    title={a.url}
+                  >
+                    <td><StatusBadge s={a.last_status} /></td>
+                    <td className="mono">{a.name}</td>
+                    <td>
+                      <div>{a.last_latency != null ? `${a.last_latency}s` : "—"}</div>
+                      <SineWave latency={a.last_latency} seed={a.id} status={a.last_status} />
+                    </td>
+                    <td className="mono">{a.last_checked_at || "—"}</td>
+                    <td>
+                      <button
+                        className="danger"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDelete(a.id);
+                        }}
+                      >
+                        Borrar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {!apis.length ? (
+                  <tr><td colSpan="5">No hay APIs cargadas.</td></tr>
+                ) : null}
+              </tbody>
+            </table>
           </div>
         </section>
 
@@ -296,7 +301,7 @@ export default function App() {
       </main>
 
       <footer className="footer">
-        <span className="mono">Desarrollado por el equipo de I++</span> 
+        <span className="mono">Desarrollado por el equipo de I++</span>
       </footer>
     </div>
   );
