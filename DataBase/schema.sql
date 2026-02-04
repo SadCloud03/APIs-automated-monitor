@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS api_state (
     FOREIGN KEY (api_id) REFERENCES APIs(id) ON DELETE CASCADE
 );
 
--- ✅ NUEVO: suscriptores telegram
+---- NUEVOS suscriptores telegram ----
 CREATE TABLE IF NOT EXISTS subscribers (
     chat_id INTEGER PRIMARY KEY,
     username TEXT,

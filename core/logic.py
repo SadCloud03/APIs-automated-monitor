@@ -11,6 +11,7 @@ SCHEMA_PATH = Path(__file__).parent.parent / "DataBase" / "schema.sql"
 # -----------------------------------------------------------------------------
 # SQLite CURRENT_TIMESTAMP es UTC. Para la demo guardamos todo ya ajustado a UTC-3
 # (Asunción) para que el dashboard muestre la hora correcta sin convertir en frontend.
+
 TZ_MOD = "-3 hours"
 
 
@@ -63,9 +64,7 @@ def _get_conn() -> sqlite3.Connection:
     return conn
 
 
-# -------------------------
-# Escrituras
-# -------------------------
+# ------- PARA ESCRITURAS ------
 
 def add_API_database(api_name: str, api_url: str) -> None:
     api_name = (api_name or "").strip()
@@ -139,9 +138,7 @@ def touch_alert(api_id: int) -> None:
         )
 
 
-# -------------------------
-# Lecturas
-# -------------------------
+# ------ PARA LECTURA ------
 
 def get_all_apis() -> List[Tuple[int, str, str]]:
     with _get_conn() as conn:
@@ -225,10 +222,7 @@ def get_overview_stats() -> Dict[str, Any]:
         down = conn.execute("SELECT COUNT(*) AS n FROM api_state WHERE last_status = 'DOWN';").fetchone()["n"]
     return {"total": total, "up": up, "down": down}
 
-
-# -------------------------
-# ✅ Telegram subscribers
-# -------------------------
+# ----- SUBSCRIPCIONES DE TELEGRAM -----
 
 def add_subscriber(chat_id: int, username: str = None, first_name: str = None, last_name: str = None) -> None:
     with _get_conn() as conn:
